@@ -6,8 +6,8 @@
 1.  **Clone this Repository:**
 
     ```bash
-    ...
-    cd yolo_docker
+    git clone https://github.com/acg22sb/COM3528-pre-.git
+    cd COM3528-pre-
     ```
 
 2.  **Download nano YOLOv8 Model:**
