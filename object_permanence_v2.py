@@ -1,43 +1,51 @@
 """
 User mouse input simulates object sightings (circles) of varying confidence (colour)
-Note: To simulate object sightings, hold for click different times in different positions
-Displays a representation of miro's perception of the world in a pygame window
-Implements forgetfullness "I havent seen that object in a while must have been a false positive"
-Implements consumption "I saw the object in a similar place before, it must be the same instance of a potential object, combine them"
-Implements targeting, identifies the most probable possible instance of the target object as a target (marked with a blue cross)
-Note: Currently implemented as an aside to the project, miro and ros incorporation is TODO
+Displays a representation of miro's perception of the world in a tkinter window
 """
 
-
-import time, pygame
+import time
+import tkinter as tk
 
 RES = (300, 300)
 FPS = 60
-screen = pygame.display.set_mode(RES)
-pygame.display.set_caption("Obj Permanence Map")
-background_colour = "black"
-clock = pygame.time.Clock()
+
+root = tk.Tk()
+root.title("Obj Permanence Map")
+
+canvas = tk.Canvas(root, width=RES[0], height=RES[1], bg="black")
+canvas.pack()
 
 class TargetMarker:
     def __init__(self, pos):
         self.pos = pos
-        self.w, self.h = 30, 30
-        self.image = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-        pygame.draw.line(self.image, "blue", (0, 0), (self.w, self.h), 8)
-        pygame.draw.line(self.image, "blue", (0, self.h), (self.w, 0), 8)
+        self.size = 30
+        self.item1 = None
+        self.item2 = None
         
     def draw(self):
-        screen.blit(self.image, (self.pos[0] - self.w//2, self.pos[1] - self.h//2))
+        x, y = self.pos
+        half = self.size // 2
+        # remove previous cross
+        if self.item1: canvas.delete(self.item1)
+        if self.item2: canvas.delete(self.item2)
+        self.item1 = canvas.create_line(x - half, y - half, x + half, y + half, fill="blue", width=3)
+        self.item2 = canvas.create_line(x - half, y + half, x + half, y - half, fill="blue", width=3)
         
 
 class PotentialTargetObject:
     def __init__(self, pos, certainty):
         self.pos = [pos[0], pos[1]]
         self.certainty = certainty
+        self.item = None
 
     def draw(self):
-        colour = (int(255 - 255 * (self.certainty / 100)), int(255 * (self.certainty / 100)), 0)
-        pygame.draw.circle(screen, colour, world_pos_to_screen_pos(self.pos), (self.certainty / 100) * 20)
+        x, y = world_pos_to_screen_pos(self.pos)
+        r = (self.certainty / 100) * 20
+        colour = "#%02x%02x00" % (int(255 - 255 * (self.certainty / 100)),
+                                   int(255 * (self.certainty / 100)))
+        if self.item:
+            canvas.delete(self.item)
+        self.item = canvas.create_oval(x - r, y - r, x + r, y + r, fill=colour, outline="")
 
 
 def world_pos_to_screen_pos(pos):
@@ -78,52 +86,54 @@ def process_consumptions(objects, threshold_distance):
 
     objects[:] = [o for idx, o in enumerate(objects) if idx not in consumed_indices]
 
+
+# ---------- main state ----------
 potential_target_objects = []
-
 click_time = None
-
 forgetfullness = 2
 threshold_distance = 0.2
-
 last_time = time.perf_counter()
 
 target_marker = TargetMarker((RES[0]//2, RES[1]//2))
 
-while True:
+# ---------- mouse events ----------
+def on_mouse_down(event):
+    global click_time
+    click_time = time.perf_counter()
 
-    screen.fill(background_colour)
+def on_mouse_up(event):
+    global click_time
+    if click_time is None:
+        return
+    click_duration = time.perf_counter() - click_time
+    world_pos = screen_pos_to_world_pos((event.x, event.y))
+    certainty = min(300 * click_duration, 100)
+    potential_target_objects.append(PotentialTargetObject(world_pos, certainty))
+    click_time = None
 
-    delta_time = time.perf_counter() - last_time
-    last_time = time.perf_counter()
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            quit()
-            
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                click_time = time.perf_counter()
-                
-        if event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1:
-                click_duration = time.perf_counter() - click_time
-                world_pos = screen_pos_to_world_pos(event.pos)
-                certainty = min(300 * click_duration, 100)
-
-                potential_target_objects.append(PotentialTargetObject(world_pos, certainty))
+canvas.bind("<ButtonPress-1>", on_mouse_down)
+canvas.bind("<ButtonRelease-1>", on_mouse_up)
 
 
+# ---------- main loop ----------
+def update():
+    global last_time
+    now = time.perf_counter()
+    delta_time = now - last_time
+    last_time = now
+
+    # decay objects
     i = 0
     while i < len(potential_target_objects):
         potential_target_objects[i].certainty -= forgetfullness * delta_time
         if potential_target_objects[i].certainty <= 0:
-            potential_target_objects.remove(potential_target_objects[i])
+            potential_target_objects.pop(i)
         else:
             i += 1
 
     process_consumptions(potential_target_objects, threshold_distance)
 
+    # find biggest object
     biggest_object = None
     biggest_certainty = 0
     for o in potential_target_objects:
@@ -131,14 +141,18 @@ while True:
             biggest_object = o
             biggest_certainty = o.certainty
 
+    # draw all objects
+    canvas.delete("all")  # clear everything
     for o in potential_target_objects:
         o.draw()
 
-    if biggest_object != None:
+    # draw target marker
+    if biggest_object:
         target_marker.pos = world_pos_to_screen_pos(biggest_object.pos)
     target_marker.draw()
-    pygame.display.update()
-    clock.tick(FPS)
-    
+
+    root.after(int(1000/FPS), update)
 
 
+update()
+root.mainloop()
