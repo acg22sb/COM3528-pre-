@@ -15,12 +15,13 @@ RUN apt-get update && apt-get install -y \
 
 # Install ROS Noetic (Minimal)
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
-# Fixed the typo in the line below (removed the '>')
 RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/ros-latest.list > /dev/null
 
+# --- CHANGED ---
+# Install *only* the minimal ROS libraries needed.
+# We CANNOT install 'ros-noetic-cv-bridge' from apt.
 RUN apt-get update && apt-get install -y \
     python3-rospy \
-    ros-noetic-cv-bridge \
     ros-noetic-vision-msgs \
     && rm -rf /var/lib/apt/lists/*
     
@@ -31,7 +32,7 @@ SHELL ["/bin/bash", "-c"]
 WORKDIR /app
 
 # Install CPU-only torch/torchvision *compatible with Python 3.8*
-# We pin older, stable versions AND their dependencies to avoid conflicts.
+# We pin older, stable versions to avoid dependency conflicts.
 RUN pip3 install --no-cache-dir \
     "torch==1.13.1" \
     "torchvision==0.14.1" \
@@ -41,6 +42,16 @@ RUN pip3 install --no-cache-dir \
 # Install ultralytics (from requirements.txt)
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
+
+# --- NEW FIX ---
+# Install a modern, pip-based cv_bridge replacement.
+# This version will use the NEW numpy and opencv installed by ultralytics,
+# completely avoiding the apt/pip conflict.
+RUN pip3 install --no-cache-dir cv-bridge-py
+
+# --- REMOVED ---
+# The old fix for PyYAML and numpy is no longer needed and would break ultralytics.
+# We now use the new versions of these libraries installed by pip.
 
 # Setup Application
 COPY yolo_node.py .

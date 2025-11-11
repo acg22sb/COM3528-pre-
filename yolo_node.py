@@ -3,7 +3,7 @@
 import rospy
 import cv2
 import sys
-import time # Using time.sleep for a simple, robust loop
+import time
 from sensor_msgs.msg import CompressedImage
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from cv_bridge import CvBridge
@@ -77,26 +77,28 @@ class YOLONode:
 
     def run(self):
         rospy.loginfo("--- [YOLO Node] Ready and entering spin loop ---")
-        # rospy.spin() is the most efficient way to keep the node alive
-        # and allow callbacks to be processed.
         rospy.spin()
         rospy.loginfo("--- [YOLO Node] Exiting spin loop ---")
 
 if __name__ == '__main__':
     try:
         rospy.loginfo("[YOLO Node] Waiting for ROS Master...")
-        rospy.wait_for_master(timeout=5.0)
-        rospy.loginfo("[YOLO Node] ROS Master found!")
-
+        
+        # rospy.init_node() WILL block and wait for roscore to be available.
+        # The separate wait_for_master call was incorrect and unnecessary.
         rospy.init_node('yolo_detector', anonymous=True)
+        
+        rospy.loginfo("[YOLO Node] ROS Master found and node initialized!")
+
         node = YOLONode()
         node.run()
 
     except rospy.ROSInterruptException:
         rospy.loginfo("[YOLO Node] Shutting down due to ROS Interrupt.")
     except rospy.ROSException as e:
-        rospy.logerr(f"[YOLO Node] CRITICAL: Could not connect to ROS Master: {e}")
-        sys.exit(1)
+        # This will catch a failure from init_node (e.g., if roscore is never found)
+        rospy.logerr(f"[YOLO Node] CRITICAL: Could not initialize node: {e}")
+        sys.exit(1) # Force an error code 1
     except Exception as e:
         rospy.logerr(f"[YOLO Node] An unhandled exception occurred: {e}")
         sys.exit(1)
