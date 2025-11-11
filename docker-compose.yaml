@@ -13,12 +13,5 @@ services:
     environment:
       - ROS_MASTER_URI=http://127.0.0.1:11311/
       - ROS_IP=127.0.0.1
-
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu] 
+      
     command: /bin/bash -c "set -e && source /opt/ros/noetic/setup.bash && python3 /app/yolo_node.py"
