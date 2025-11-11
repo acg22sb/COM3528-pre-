@@ -1,17 +1,16 @@
-version: '3.8'
-
 services:
   yolo:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: yolo_detector
-    network_mode: host 
-    privileged: true
     restart: unless-stopped
-
-    environment:
-      - ROS_MASTER_URI=http://127.0.0.1:11311/
-      - ROS_IP=127.0.0.1
+    ports:
+      # to port 5000 inside this container.
+      - "5000:5000"
       
-    command: /bin/bash -c "set -e && source /opt/ros/noetic/setup.bash && python3 /app/yolo_node.py"
+    stdin_open: true  # Keep stdin open for an interactive shell
+    tty: true         # Allocate a pseudo-TTY
+    
+    command: |
+      /bin/bash -c "trap : TERM INT; sleep infinity & wait"
