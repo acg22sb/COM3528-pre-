@@ -17,7 +17,9 @@
 -----
 
 ## Testing
-
+'''bash
+pip3 install numpy requests opencv-python-headless
+'''
 
 ### Terminal 1: Start `miro-docker`
 
@@ -51,24 +53,33 @@ miro sim
 ```bash
 # Navigate to this project's folder
 cd ../yolo_docker
-docker-compose up --build
+./yolo-docker.sh start
+./yolo-docker.sh term
 ```
-It will print:
-
-```
-[YOLO Node] ROS Master found!
---- [YOLO Node] Ready and entering spin loop ---
-```
-
-*This proves it is connected and working. Leave it running.*
-
-### Terminal 5: Verify Detections
-
-```bash
-cd ../miro-docker
-./miro-docker.sh term
-# You are now inside the MiRo container
-rostopic echo /yolo/detections
-```
-
-*If you see `vision_msgs/Detection2DArray` messages streaming, the system is working*
+## Example Json for a man and potted plant
+'''
+Response JSON: [
+  {
+    "box": [
+      900.274658203125,
+      529.3267822265625,
+      2838.866455078125,
+      2135.089599609375
+    ],
+    "class_id": 0,
+    "class_name": "person",
+    "confidence": 0.9399809241294861
+  },
+  {
+    "box": [
+      1.75872802734375,
+      12.514892578125,
+      1277.793212890625,
+      2119.076904296875
+    ],
+    "class_id": 58,
+    "class_name": "potted plant",
+    "confidence": 0.5024356842041016
+  }
+]
+'''

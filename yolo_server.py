@@ -33,14 +33,12 @@ def detect():
     file = request.files['image']
 
     try:
-        # Read image bytes from the request
         img_bytes = file.read()
 
         # Convert bytes to a PIL Image
         img_pil = Image.open(io.BytesIO(img_bytes))
 
         # Convert PIL Image to an OpenCV (numpy) array in BGR format
-        # This is the format YOLO expects
         cv_image = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
     except Exception as e:
