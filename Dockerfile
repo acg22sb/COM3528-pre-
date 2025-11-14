@@ -18,9 +18,9 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY yolo_server.py .
 COPY yolov8n.pt .
-COPY testscript.py
-COPY testvscript.py
-COPY testvideo.mp4
+COPY testscript.py .
+COPY testvscript.py .
+COPY testvideo.mp4 .
 
 EXPOSE 5000
 
