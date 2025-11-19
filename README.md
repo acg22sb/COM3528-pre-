@@ -1,85 +1,38 @@
+HOW TO RUN:
 
-# YOLOv8 ROS Detection Node
+Navigate into the provided miro-docker repository and start the miro-docker container
 
-## Setup
+`cd miro-docker`
 
-1.  **Clone this Repository:**
+`./miro-docker.sh start`
 
-    ```bash
-    git clone https://github.com/acg22sb/COM3528-pre-.git
-    cd COM3528-pre-
-    ```
+wait for the miro docker container and image to be made just ress enter if asked for names
 
-2.  **Download nano YOLOv8 Model:**
-    ```bash
-    wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.pt
-    ```
------
+launch the miro hub terminal
 
-## Testing
-'''bash
-pip3 install numpy requests opencv-python-headless
-'''
+`miro-hub term`
 
-### Terminal 1: Start `miro-docker`
+navigate to mdk/catkin_ws/src within the miro-docker container
+run pwd to find the full path
 
-```bash
-cd ../miro-docker
-./miro-docker.sh start
-```
+navigate into "feed_the_miro_pkg" our repository in another terminal
+run `pwd` to find the full path
 
-### Terminal 2: Start `roscore`
+copy the feed the miro package into the docker container using
 
-```bash
-cd ../miro-docker
-./miro-docker.sh term
-# You are now inside the MiRo container
-roscore
-```
+`docker cp <output of second pwd> miro-docker:<output of first pwd>`
 
-### Terminal 3: Start MiRo Simulation
+check that the ros1 package feed_the_miro_pkg has been copied into miro-docker
 
-```bash
-cd ../miro-docker
-./miro-docker.sh term
-# You are now inside the MiRo container
-miro sim
-```
+make the yolo container and run the yolo node
 
-*A Gazebo window should appear*
+set miro mode to robot
+configure the ip for the miro and computer
 
-### Terminal 4: Start the YOLO Node (This Project)
+connect to dia lab
 
-```bash
-# Navigate to this project's folder
-cd ../yolo_docker
-./yolo-docker.sh start
-./yolo-docker.sh term
-```
-## Example Json for a man and potted plant
-'''
-Response JSON: [
-  {
-    "box": [
-      900.274658203125,
-      529.3267822265625,
-      2838.866455078125,
-      2135.089599609375
-    ],
-    "class_id": 0,
-    "class_name": "person",
-    "confidence": 0.9399809241294861
-  },
-  {
-    "box": [
-      1.75872802734375,
-      12.514892578125,
-      1277.793212890625,
-      2119.076904296875
-    ],
-    "class_id": 58,
-    "class_name": "potted plant",
-    "confidence": 0.5024356842041016
-  }
-]
-'''
+connect to the miro
+
+check the miro gui works
+
+run the camera_reader.py within the copy of the ros1 package in miro-docker
