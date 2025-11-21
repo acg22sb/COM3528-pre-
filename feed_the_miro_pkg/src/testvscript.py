@@ -47,6 +47,11 @@ def send_frame_to_server(frame):
         print(f"Detections Found: {len(detections)}")
         # Pretty-print the JSON response
         print(f"Response JSON: {json.dumps(detections, indent=2)}")
+        return detections
+
+    except Exception as e:
+        print(f"Connection Error: {e}")
+        return [] 
 
     except requests.exceptions.ConnectionError:
         print("\n--- TEST FAILED ---")
