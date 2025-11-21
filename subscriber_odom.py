@@ -34,6 +34,15 @@ class OdomSubscriber(object):
         self.y0 = self.y
         self.theta0 = self.theta
 
+    def whereAmI(self):
+        data = {
+            "X": odom.x - odom.x0,
+            "Y": odom.y - odom.y0,
+            "Yaw": odom.theta - odom.theta0,
+        }
+
+        return data
+
 if __name__ == '__main__':
     odom = OdomSubscriber()
     rospy.sleep(0.5) # short wait to make sure everything is initialised
