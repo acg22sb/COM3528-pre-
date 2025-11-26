@@ -3,9 +3,12 @@ import rospy
 import threading
 from std_msgs.msg import Bool, Float32
 import math
+import os
+import sys
 
-# Import the interface file you pasted earlier
-# Make sure miro_ros_interface.py is in the same folder!
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(script_dir)
+
 from miro_ros_interface import MiRoPublishers
 
 class MoodController:
