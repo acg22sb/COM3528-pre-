@@ -1,0 +1,24 @@
+<launch>
+
+    <env name="MIRO_ROBOT_NAME" value="$(optenv MIRO_ROBOT_NAME miro01)" />
+    <include file="/opt/miro/robot/config/launch/miro_bringup.launch" />
+
+    <param name="/wait_for_topics" value="1.0" />
+
+    <node
+        pkg="feed_the_miro_pkg"
+        type="masternode.py"
+        name="masternode"
+        output="screen"
+        required="true"
+    />
+
+    <node
+        pkg="feed_the_miro_pkg"
+        type="mood_controller.py"
+        name="mood_controller"
+        output="screen"
+        respawn="false"
+    />
+
+</launch>
