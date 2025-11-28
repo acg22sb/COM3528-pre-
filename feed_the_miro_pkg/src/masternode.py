@@ -36,7 +36,7 @@ class MasterNode(MiRoCameraReader):
                 
                 if detections:
                     for obj in detections:
-                        label = obj.get('label', obj.get('class', ''))
+                        label = obj.get('label', obj.get('class_name', ""))
                         if label == 'human' or label == 'person':
                             human_seen = True
                             confidence = obj.get('confidence', 0.0) * 100 
