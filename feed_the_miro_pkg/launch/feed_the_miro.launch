@@ -1,4 +1,5 @@
 <launch>
     <node pkg="feed_the_miro_pkg" type="masternode.py" name="masternode" output="screen"/>
     <node pkg="feed_the_miro_pkg" type="mood_controller.py" name="mood_controller" output="screen"/>
+    <node pkg="feed_the_miro_pkg" type="subscriber_odom.py" name="odom_subscriber" output="screen"/>
 </launch>
