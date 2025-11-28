@@ -20,7 +20,7 @@ class MasterNode(MiRoCameraReader):
         self.pub_visible = rospy.Publisher('/object_visible', Bool, queue_size=1)
         self.pub_certainty = rospy.Publisher('/object_certainty', Float32, queue_size=1)
         
-        print("Running master node")
+        rospy.loginfo("Running master node")
 
     def run(self):
         rate = rospy.Rate(10) # Check 10 times a second
@@ -40,7 +40,7 @@ class MasterNode(MiRoCameraReader):
                         if label == 'human' or label == 'person':
                             human_seen = True
                             confidence = obj.get('confidence', 0.0) * 100 
-                            print(f"Human Detected! Certainty: {confidence:.1f}%")
+                            rospy.loginfo(f"Human Detected! Certainty: {confidence:.1f}%")
                             break
 
                 # Publish for Mood Controller

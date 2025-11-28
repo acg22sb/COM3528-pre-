@@ -15,7 +15,7 @@ def send_frame_to_server(frame):
     """
     Encodes a single video frame and sends it to the YOLO server.
     """
-    print(f"Attempting to connect to server at {SERVER_URL}...")
+    #print(f"Attempting to connect to server at {SERVER_URL}...")
     try:
         # Encode the frame as a .jpg in memory
         is_success, buffer = cv2.imencode(".jpg", frame)
@@ -39,14 +39,14 @@ def send_frame_to_server(frame):
         response.raise_for_status() 
 
         # --- Test Results ---
-        print("\n--- Test Results ---")
-        print(f"Server Status Code: {response.status_code}")
-        print("Connection SUCCESSFUL.")
+        #print("\n--- Test Results ---")
+        #print(f"Server Status Code: {response.status_code}")
+        #print("Connection SUCCESSFUL.")
         
         detections = response.json()
-        print(f"Detections Found: {len(detections)}")
+        #print(f"Detections Found: {len(detections)}")
         # Pretty-print the JSON response
-        print(f"Response JSON: {json.dumps(detections, indent=2)}")
+        #print(f"Response JSON: {json.dumps(detections, indent=2)}")
         return detections
 
     except Exception as e:
