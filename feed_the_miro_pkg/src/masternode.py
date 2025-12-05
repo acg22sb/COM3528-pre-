@@ -8,11 +8,13 @@ import math
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Bool, Float32
+from nav_msgs.msg import Odometry
 
 from camera_reader import MiRoCameraReader
 from testvscript import send_frame_to_server
 from object_permanence_v2 import ObjectPermanenceManager
 from subscriber_odom import OdomSubscriber
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
 TARGET_CLASS = "person" 
 
@@ -25,10 +27,9 @@ class MiroDepthCalculator:
         # Camera Resolution (640x360 as per paper)
         self.IMG_WIDTH = 640
         self.IMG_HEIGHT = 360
-        
         self.cx = self.IMG_WIDTH / 2
         self.cy = self.IMG_HEIGHT / 2
-
+        
     def get_location(self, left_pixel, right_pixel_x):
         u_L, v_L = left_pixel
         u_R = right_pixel_x
@@ -75,7 +76,35 @@ class MasterNode(MiRoCameraReader):
         rospy.loginfo(f"Running master node. Tracking: {TARGET_CLASS}")
 
         self.object_permanence_manager = ObjectPermanenceManager()
-        self.odom = OdomSubscriber()
+        ##self.odom = OdomSubscriber()
+        self.x = self.x0 = 0
+        self.y = self.y0 = 0
+        self.theta = self.theta0 = 0
+        self.topic_base_name = "/" + os.getenv("MIRO_ROBOT_NAME")
+        self.subscriber = rospy.Subscriber(self.topic_base_name + "/sensors/odom", Odometry, self.callback)
+
+    def callback(self, data):
+        orientation = data.pose.pose.orientation
+        self.x = data.pose.pose.position.x
+        self.y = data.pose.pose.position.y
+        (_, _, self.theta) = euler_from_quaternion([orientation.x,
+            orientation.y, orientation.z, orientation.w],'sxyz')
+
+    def reset(self):
+        # Not a true reset, rather a change in frame of reference
+        self.x0 = self.x
+        self.y0 = self.y
+        self.theta0 = self.theta
+
+    def whereAmI(self):
+        data = {
+            "X": self.x - self.x0,
+            "Y": self.y - self.y0,
+            "Yaw": self.theta - self.theta0,
+        }
+
+        return data
+
 
     def get_target_center(self, detections):
         if not detections:
@@ -110,7 +139,7 @@ class MasterNode(MiRoCameraReader):
     def run(self):
         # Check 5 times a second
         rate = rospy.Rate(5) 
-        pos_data = self.odom.whereAmI()
+        pos_data = self.whereAmI()
         
         while not rospy.is_shutdown():
             # Pair of eyes (Left=0, Right=1)
@@ -167,12 +196,16 @@ class MasterNode(MiRoCameraReader):
                     move_dist = math.pythag(dx, dy)
                     move_dir = math.degrees(math.atan2(dy, dx))
                     print(f"Gotta get moving in direction {move_dir} degrees, distance {move_dist}")
+                    self.pub_dist.publish(move_dist)
+                    self.pub_angle.publish(move_dir)
+                else:
+                    self.pub_dist.publish(dist)
+                    self.pub_angle.publish(angle)
+
 
                 # Publish Data
                 self.pub_visible.publish(target_detected)
                 self.pub_certainty.publish(conf_L * 100)
-                self.pub_dist.publish(dist)
-                self.pub_angle.publish(angle)
 
                 self.new_frame[0] = False
                 self.new_frame[1] = False
