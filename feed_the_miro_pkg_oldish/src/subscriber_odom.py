@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
 #from https://github.com/AlexandrLucas/COM3528/blob/master/com3528_examples/nodes/subscriber_odom.py
-
+#!/usr/bin/env python3
 import os
 import rospy    # ROS Python interface
 from nav_msgs.msg import Odometry   # ROS odometry subsciriber

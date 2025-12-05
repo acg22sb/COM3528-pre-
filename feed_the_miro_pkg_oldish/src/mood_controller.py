@@ -55,8 +55,8 @@ class MoodController:
         msg.data = [
             0.5,           # droop
             wag_value,     # wag (0=left, 1=right)
-            0.0, 0.0,      # eyes
-            wag_value, wag_value       # ears
+            0.5, 0.5,      # eyes
+            0.5, 0.5       # ears
         ]
         self.pub_cosmetic.publish(msg)
 
