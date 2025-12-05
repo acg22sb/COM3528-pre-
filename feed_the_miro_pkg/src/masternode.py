@@ -12,6 +12,7 @@ from std_msgs.msg import Bool, Float32
 from camera_reader import MiRoCameraReader
 from testvscript import send_frame_to_server
 from object_permanence_v2 import ObjectPermanenceManager
+from subscriber_odom import OdomSubscriber
 
 TARGET_CLASS = "person" 
 
@@ -74,6 +75,7 @@ class MasterNode(MiRoCameraReader):
         rospy.loginfo(f"Running master node. Tracking: {TARGET_CLASS}")
 
         self.object_permanence_manager = ObjectPermanenceManager()
+        self.odom = OdomSubscriber()
 
     def get_target_center(self, detections):
         if not detections:
@@ -108,6 +110,7 @@ class MasterNode(MiRoCameraReader):
     def run(self):
         # Check 5 times a second
         rate = rospy.Rate(5) 
+        pos_data = self.odom.whereAmI()
         
         while not rospy.is_shutdown():
             # Pair of eyes (Left=0, Right=1)
@@ -146,22 +149,24 @@ class MasterNode(MiRoCameraReader):
                         rospy.loginfo("Object in Left eye only (No Depth)")
 
                 if successful_observation:
-
                     arena_width = 5
                     converted_dist = dist * (1 / arena_width)
 
-                    miro_angle = 0
+
+                    miro_angle = pos_data["Yaw"]
                     abs_angle = angle - miro_angle
-                    x, y = math.cos(math.radians(abs_angle)) * converted_dist, math.sin(math.radians(abs_angle)) * converted_dist
-                    self.object_permanence_manager.add_observation((x, y), 0.5)
+                    dx, dy = (math.cos(math.radians(abs_angle)) - pos_data["X"]) * converted_dist, (math.sin(math.radians(abs_angle)) - pos_data["Y"]) * converted_dist
+                    self.object_permanence_manager.add_observation((dx, dy), 0.5)
 
                 target_pos = self.object_permanence_manager.get_target_pos()
 
                 print(f"Target Position {target_pos}")
 
                 if target_pos:
-                    move_dir = math.degrees(math.atan2(target_pos[1], target_pos[0]))
-                    print(f"Gotta get moving in direction {move_dir} degrees")
+                    dx, dy = target_pos[0] * arena_width - pos_data["X"], target_pos[1] * arena_width - pos_data["Y"]
+                    move_dist = math.pythag(dx, dy)
+                    move_dir = math.degrees(math.atan2(dy, dx))
+                    print(f"Gotta get moving in direction {move_dir} degrees, distance {move_dist}")
 
                 # Publish Data
                 self.pub_visible.publish(target_detected)
