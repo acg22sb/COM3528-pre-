@@ -11,7 +11,6 @@ from std_msgs.msg import Bool, Float32
 
 from camera_reader import MiRoCameraReader
 from testvscript import send_frame_to_server
-from object_permanence_v2 import ObjectPermanenceManager
 
 TARGET_CLASS = "person" 
 
@@ -73,8 +72,6 @@ class MasterNode(MiRoCameraReader):
         
         rospy.loginfo(f"Running master node. Tracking: {TARGET_CLASS}")
 
-        self.object_permanence_manager = ObjectPermanenceManager()
-
     def get_target_center(self, detections):
         if not detections:
             return None, 0.0
@@ -123,8 +120,6 @@ class MasterNode(MiRoCameraReader):
                 dist = 0.0
                 angle = 0.0
                 
-                successful_observation = False
-                
                 # If found in left, look in right eye to calculate depth
                 if center_L:
                     target_detected = True
@@ -139,29 +134,10 @@ class MasterNode(MiRoCameraReader):
                             dist = res['distance']
                             angle = res['angle']
                             rospy.loginfo(f"Object Found: {dist:.2f}m | {angle:.1f} deg")
-                            successful_observation = True
                         else:
                             rospy.logwarn("Stereo Mismatch (Negative Disparity)")
                     else:
                         rospy.loginfo("Object in Left eye only (No Depth)")
-
-                if successful_observation:
-
-                    arena_width = 5
-                    converted_dist = dist * (1 / arena_width)
-
-                    miro_angle = 0
-                    abs_angle = angle - miro_angle
-                    x, y = math.cos(math.radians(abs_angle)) * converted_dist, math.sin(math.radians(abs_angle)) * converted_dist
-                    self.object_permanence_manager.add_observation((x, y), 0.5)
-
-                target_pos = self.object_permanence_manager.get_target_pos()
-
-                print(f"Target Position {target_pos}")
-
-                if target_pos:
-                    move_dir = math.degrees(math.atan2(target_pos[1], target_pos[0]))
-                    print(f"Gotta get moving in direction {move_dir} degrees")
 
                 # Publish Data
                 self.pub_visible.publish(target_detected)
