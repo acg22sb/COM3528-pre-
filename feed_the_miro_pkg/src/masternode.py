@@ -193,7 +193,7 @@ class MasterNode(MiRoCameraReader):
 
                 if target_pos:
                     dx, dy = target_pos[0] * arena_width - pos_data["X"], target_pos[1] * arena_width - pos_data["Y"]
-                    move_dist = math.pythag(dx, dy)
+                    move_dist = math.hypot(dx, dy)
                     move_dir = math.degrees(math.atan2(dy, dx))
                     print(f"Gotta get moving in direction {move_dir} degrees, distance {move_dist}")
                     self.pub_dist.publish(move_dist)
