@@ -1,18 +1,36 @@
 #!/usr/bin/env python3
 import rospy
 import threading
-from std_msgs.msg import Bool, Float32, UInt16MultiArray, Float32MultiArray
-import math
+import os
+from std_msgs.msg import Bool, Float32, Float32MultiArray
+
+try:
+    from miro2.lib import miro_ros_client
+except ImportError:
+    rospy.logfatal("Could not import miro2.lib. Please source ~/mdk/setup.bash")
+    exit(1)
 
 class MoodController:
     def __init__(self):
         rospy.init_node('mood_controller', anonymous=True)
+
+        self.miro_client = miro_ros_client.MiroClient(robot='rob01', wait_for_services=False)
 
         # parameters
         self.update_hz = rospy.get_param('~update_hz', 10.0)
         self.wag_speed = rospy.get_param('~wag_speed', 5)
         self.happy_threshold = rospy.get_param('~happy_threshold', 0.5)
         self.sad_threshold = rospy.get_param('~sad_threshold', -0.5)
+
+        # s01 is typically a happy chirp, s05 is a sad/low squeak
+        self.sound_happy = os.path.expanduser("~/miro/share/media/s01.wav")
+        self.sound_sad = os.path.expanduser("~/miro/share/media/s05.wav")
+
+        # Fallback check (some robots use ~/mdk instead of ~/miro)
+        if not os.path.exists(self.sound_happy):
+            self.sound_happy = os.path.expanduser("~/mdk/share/media/s01.wav")
+        if not os.path.exists(self.sound_sad):
+            self.sound_sad = os.path.expanduser("~/mdk/share/media/s05.wav")
 
         # state
         self.object_visible = False
@@ -26,12 +44,6 @@ class MoodController:
         self.pub_cosmetic = rospy.Publisher(
             "/miro/control/cosmetic_joints",
             Float32MultiArray,
-            queue_size=1
-        )
-
-        self.pub_tone = rospy.Publisher(
-            "/miro/control/tone",
-            UInt16MultiArray,
             queue_size=1
         )
 
@@ -56,14 +68,18 @@ class MoodController:
             0.5,           # droop
             wag_value,     # wag (0=left, 1=right)
             0.0, 0.0,      # eyes
-            wag_value, wag_value       # ears
+            wag_value, wag_value        # ears
         ]
         self.pub_cosmetic.publish(msg)
 
-    def send_tone(self, freq, volume, duration):
-        msg = UInt16MultiArray()
-        msg.data = [freq, volume, int(duration * 50)]
-        self.pub_tone.publish(msg)
+    #New Method to Stream Audio
+    def drive_voice(self, filename):
+        if os.path.exists(filename):
+            rospy.loginfo(f"Streaming sound: {filename}")
+            # This function from miro2 library streams the .wav file
+            self.miro_client.push_audio_stream(filename)
+        else:
+            rospy.logwarn(f"Audio file not found: {filename}")
 
     def wag_tail(self, wags):
         self.is_wagging = True
@@ -87,8 +103,9 @@ class MoodController:
         self.is_making_sound = True
         try:
             with self.lock:
-                self.send_tone(800, 200, 0.5)
-                rospy.sleep(1.0)
+                # REPLACED: send_tone with drive_voice
+                self.drive_voice(self.sound_happy)
+                rospy.sleep(1.0) # Wait approx time for sound to finish
         finally:
             self.is_making_sound = False
 
@@ -96,7 +113,8 @@ class MoodController:
         self.is_making_sound = True
         try:
             with self.lock:
-                self.send_tone(200, 150, 1.0)
+                # REPLACED: send_tone with drive_voice
+                self.drive_voice(self.sound_sad)
                 rospy.sleep(1.5)
         finally:
             self.is_making_sound = False
