@@ -41,6 +41,9 @@ def detect():
         # Convert PIL Image to an OpenCV (numpy) array in BGR format
         cv_image = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
+        # Force resize to MiRo resolution (640x360)
+        cv_image = cv2.resize(cv_image, (640, 360))
+
     except Exception as e:
         return jsonify({"error": f"Failed to decode image: {e}"}), 400
 
