@@ -11,6 +11,7 @@ import sys
 # --- Configuration ---
 MODEL_PATH = 'yolo11l.pt'
 CONFIDENCE_THRESHOLD = 0.1
+TARGET_CLASS = 'banana'
 
 app = Flask(__name__)
 
@@ -23,10 +24,6 @@ except Exception as e:
 
 @app.route('/detect', methods=['POST'])
 def detect():
-    """
-    Handle an image upload, run YOLO detection, and return JSON results.
-    Expects a POST request with a file part named 'image'.
-    """
     if 'image' not in request.files:
         return jsonify({"error": "No 'image' file part in request"}), 400
 
@@ -34,45 +31,41 @@ def detect():
 
     try:
         img_bytes = file.read()
-
-        # Convert bytes to a PIL Image
         img_pil = Image.open(io.BytesIO(img_bytes))
-
-        # Convert PIL Image to an OpenCV (numpy) array in BGR format
         cv_image = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-
-        # Force resize to MiRo resolution (640x360)
         cv_image = cv2.resize(cv_image, (640, 360))
-
     except Exception as e:
         return jsonify({"error": f"Failed to decode image: {e}"}), 400
 
     # Run YOLO inference
     results = model(cv_image, verbose=False)
 
-    # Format results into a JSON list
-    detections = []
+    target_object = None
+    max_conf = 0.0
+
     for res in results[0].boxes:
         score = float(res.conf[0])
 
-        # Apply confidence threshold
         if score < CONFIDENCE_THRESHOLD:
             continue
 
         class_id = int(res.cls[0])
         class_name = model.names[class_id]
-        box = res.xyxy[0].cpu().numpy().tolist() # [x1, y1, x2, y2]
 
-        detections.append({
-            "class_id": class_id,
-            "class_name": class_name,
-            "confidence": score,
-            "box": box
-        })
+        if class_name == TARGET_CLASS and score > max_conf:
+            max_conf = score
+            box = res.xyxy[0].cpu().numpy().tolist()
+            
+            target_object = {
+                "class_id": class_id,
+                "class_name": class_name,
+                "confidence": score,
+                "box": box
+            }
 
-    # Return the JSON response, no images
-    return jsonify(detections)
+    return jsonify([target_object] if target_object else [])
 
 if __name__ == '__main__':
-    print("--- Starting YOLO Flask Server ---")
+    print("--- Starting YOLO Server ---")
+    print(f"--- Filtering for: {TARGET_CLASS} ---")
     app.run(host='0.0.0.0', port=5000)
