@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 import rospy
 import threading
-from std_msgs.msg import Bool, Float32, UInt16MultiArray, Float32MultiArray, Int8
-from sensor_msgs.msg import JointState
+from std_msgs.msg import Bool, Float32, UInt16MultiArray, Float32MultiArray
 import math
 
 class MoodController:
@@ -14,11 +13,6 @@ class MoodController:
         self.wag_speed = rospy.get_param('~wag_speed', 5)
         self.happy_threshold = rospy.get_param('~happy_threshold', 0.5)
         self.sad_threshold = rospy.get_param('~sad_threshold', -0.5)
-        self.pub_joints = rospy.Publisher("/miro/control/kinematic_joints", JointState, queue_size=1)
-        #vel_mode_pub = rospy.Publisher("/miro/control/velocity_mode", Int8, queue_size=1)
-        rospy.sleep(0.2)
-        #vel_mode_pub.publish(Int8(0))
-
 
         # state
         self.object_visible = False
@@ -44,14 +38,11 @@ class MoodController:
         # subscribers
         rospy.Subscriber('/object_visible', Bool, self.cb_visible)
         rospy.Subscriber('/object_certainty', Float32, self.cb_certainty)
-    
 
         # timer
         rospy.Timer(rospy.Duration(1.0/self.update_hz), self.update_mood)
 
         rospy.loginfo("Mood Controller started.")
-
-
 
     def cb_visible(self, msg):
         self.object_visible = msg.data
@@ -112,10 +103,6 @@ class MoodController:
 
     def update_mood(self, event):
         cert_factor = min(max(self.object_certainty, 0.0), 100.0) / 100.0
-        #msg = JointState()
-        #msg.name     = ["lift", "yaw", "pitch", "roll"]
-        #msg.position = [0.0, 1.0, 0.0, 0.0]
-        #self.pub_joints.publish(msg)
 
         if self.object_visible:
             self.mood += 0.05 * cert_factor

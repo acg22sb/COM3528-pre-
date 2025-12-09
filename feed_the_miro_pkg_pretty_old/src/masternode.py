@@ -16,54 +16,37 @@ from object_permanence_v2 import ObjectPermanenceManager
 from subscriber_odom import OdomSubscriber
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
-TARGET_CLASS = "banana" 
+TARGET_CLASS = "person" 
 
 class MiroDepthCalculator:
     def __init__(self):
         # Constants from Ling 2019 ROBIO Paper & MiRo Hardware Specs
-        self.BASELINE = 0.0862     # Distance between eyes in meters
-        self.FOCAL_LENGTH = 180.28  # Focal length in pixels
+        self.BASELINE = 0.104       # Distance between eyes in meters
+        self.FOCAL_LENGTH = 184.75  # Focal length in pixels
         
         # Camera Resolution (640x360 as per paper)
         self.IMG_WIDTH = 640
         self.IMG_HEIGHT = 360
         self.cx = self.IMG_WIDTH / 2
         self.cy = self.IMG_HEIGHT / 2
-
-        self.EYE_DIVERGENCE = 27.0
         
     def get_location(self, left_pixel, right_pixel_x):
         u_L, v_L = left_pixel
         u_R = right_pixel_x
 
         disparity = u_L - u_R
-
-        alpha_L =  math.atan((u_L - self.cx) / self.FOCAL_LENGTH)
-        alpha_R =  math.atan((u_R - self.cx) / self.FOCAL_LENGTH)
         
-        offset_L = math.radians(-self.EYE_DIVERGENCE)
-        offset_R = math.radians(self.EYE_DIVERGENCE)
-
-        theta_L = alpha_L + offset_L
-        theta_R = alpha_R + offset_R
-
-        denom = math.tan(theta_L) - math.tan(theta_R)
         # Safety check for infinite distance or negative disparity
-        if abs(denom) < 0.001:
+        if disparity <= 0:
             return None 
 
-        z = self.BASELINE / denom
+        z = (self.FOCAL_LENGTH * self.BASELINE) / disparity
 
-        if z <=0:
-            return None
-
-        x = z * math.tan(theta_L) - (self.BASELINE / 2.0)
+        x = (u_L - self.cx) * z / self.FOCAL_LENGTH
 
         y = (v_L - self.cy) * z / self.FOCAL_LENGTH
 
-        #testing formula
         total_distance = math.sqrt(x**2 + y**2 + z**2)
-        #total_distance = z
 
         angle_rad = math.atan2(x, z)
         angle_deg = math.degrees(angle_rad)
@@ -133,8 +116,6 @@ class MasterNode(MiRoCameraReader):
         for obj in detections:
             # Check if the label matches our target
             label = obj.get('class_name', obj.get('label', ''))
-
-            print(label)
             
             if label == TARGET_CLASS:
                 conf = obj.get('confidence', 0.0)
@@ -169,11 +150,7 @@ class MasterNode(MiRoCameraReader):
                 # Look for object in left eye
                 dets_left = send_frame_to_server(left_image)
                 center_L, conf_L = self.get_target_center(dets_left)
-                try:
-                    lefteyex, lefteyey = center_L
-                    rospy.loginfo("Center x and center y of left eye target: {0} and {1}".format(lefteyex, lefteyey))
-                except:
-                    rospy.loginfo("No left eye target")
+                
                 target_detected = False
                 dist = 0.0
                 angle = 0.0
@@ -186,39 +163,12 @@ class MasterNode(MiRoCameraReader):
                     
                     dets_right = send_frame_to_server(right_image)
                     center_R, _ = self.get_target_center(dets_right)
-                    try:
-                        righteyex, righteyey = center_R
-                        rospy.loginfo("Center x and center y of right eye target: {0} and {1}".format(righteyex, righteyey))
-                    except:
-                        rospy.loginfo("No right eye target")
+                    
                     if center_R:
                         res = self.calc.get_location(center_L, center_R[0])
                         
-                        boxes = [None, None]
-                        for i, detections in enumerate([dets_left, dets_right]):
-                            max_conf = 0.0
-                            chosen_object = None
-                            for obj in detections:
-                                label = obj.get('class_name', obj.get('label', ''))
-                                
-                                if label == TARGET_CLASS:
-                                    conf = obj.get('confidence', 0.0)
-                                    if conf > max_conf:
-                                        max_conf = conf
-                                        chosen_object = obj
-                            
-                                if chosen_object:
-                                    boxes[i] = chosen_object.get('box', [])
-
-                        left_box, right_box = boxes[0], boxes[1]
-
                         if res:
-                            obj_width = ((left_box[2] - left_box[0]) + (right_box[2] - right_box[0])) / 2
-                            obj_height = ((left_box[3] - left_box[1]) + (right_box[3] - right_box[1])) / 2
-                            obj_len = math.hypot(obj_width, obj_height)
-                            exp_len_at_1m = 50
-                            dist = exp_len_at_1m / obj_len
-                            #dist = res['distance']
+                            dist = res['distance']
                             angle = res['angle']
                             rospy.loginfo(f"Object Found: {dist:.2f}m | {angle:.1f} deg")
                             successful_observation = True

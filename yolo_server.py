@@ -10,7 +10,7 @@ import sys
 
 # --- Configuration ---
 MODEL_PATH = 'yolo11n.pt'
-CONFIDENCE_THRESHOLD = 0.5
+CONFIDENCE_THRESHOLD = 0.2
 
 app = Flask(__name__)
 
