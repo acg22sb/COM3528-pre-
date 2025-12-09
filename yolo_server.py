@@ -10,7 +10,7 @@ import sys
 
 # --- Configuration ---
 MODEL_PATH = 'yolo11l.pt'
-CONFIDENCE_THRESHOLD = 0.2
+CONFIDENCE_THRESHOLD = 0.1
 TARGET_CLASS = 'banana'
 
 app = Flask(__name__)
