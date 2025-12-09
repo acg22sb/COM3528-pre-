@@ -39,7 +39,7 @@ class MiroFollower:
         self.target_angle = msg.data
 
     def loop(self):
-        rate = rospy.Rate(5) # Hz
+        rate = rospy.Rate(10) # Hz
         
         while not rospy.is_shutdown():
             velocity = TwistStamped()
@@ -65,12 +65,10 @@ class MiroFollower:
                 rospy.loginfo(f"Dist: {self.target_dist:.2f} | Ang: {self.target_angle:.1f} | Cmd: [v={velocity.twist.linear.x:.2f}, w={velocity.twist.angular.z:.2f}]")
                 
             else:
-                #rospy.loginfo("should not be running!!!")
                 velocity.twist.linear.x = 0.0
                 velocity.twist.angular.z = 0.0
 
             self.pub_cmd.publish(velocity)
-            ##rospy.loginfo(f"publishig velocift {velocity}")
             rate.sleep()
 
 if __name__ == "__main__":

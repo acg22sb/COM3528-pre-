@@ -9,14 +9,12 @@ from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
 from std_msgs.msg import Bool, Float32
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import TwistStamped
 
 from camera_reader import MiRoCameraReader
 from testvscript import send_frame_to_server
 from object_permanence_v2 import ObjectPermanenceManager
 from subscriber_odom import OdomSubscriber
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
-import time
 
 TARGET_CLASS = "banana" 
 
@@ -51,17 +49,12 @@ class MiroDepthCalculator:
 
         denom = math.tan(theta_L) - math.tan(theta_R)
         # Safety check for infinite distance or negative disparity
-
         if abs(denom) < 0.001:
-            if denom >= 0:
-                denom = 0.001
-            else:
-                denom = -0.001
-            #return None
+            return None 
 
         z = self.BASELINE / denom
 
-        if z <= 0:
+        if z <=0:
             return None
 
         x = z * math.tan(theta_L) - (self.BASELINE / 2.0)
@@ -106,8 +99,6 @@ class MasterNode(MiRoCameraReader):
         self.theta = self.theta0 = 0
         self.topic_base_name = "/" + os.getenv("MIRO_ROBOT_NAME")
         self.subscriber = rospy.Subscriber(self.topic_base_name + "/sensors/odom", Odometry, self.callback)
-        topic_root = "/" + os.getenv("MIRO_ROBOT_NAME", "miro") 
-        self.pub_cmd = rospy.Publisher(topic_root + "/control/cmd_vel", TwistStamped, queue_size=10)
 
     def callback(self, data):
         orientation = data.pose.pose.orientation
@@ -166,29 +157,10 @@ class MasterNode(MiRoCameraReader):
 
     def run(self):
         # Check 5 times a second
-        rate = rospy.Rate(5)
-        velocity = TwistStamped()
-
-        target_detected = False
-
-        calibrated_odom = False
-
-        time.sleep(1) # needed for odom callibration
-        rospy.loginfo("Weeeeeeeeee")
-
+        rate = rospy.Rate(5) 
+        pos_data = self.whereAmI()
         
         while not rospy.is_shutdown():
-
-            pos_data = self.whereAmI()
-            
-            if not calibrated_odom:
-                start_x, start_y = pos_data["X"], pos_data["Y"]
-                calibrated_odom = True
-
-            odom_x, odom_y = pos_data["X"] - start_x, pos_data["Y"] - start_y
-
-            rospy.loginfo(f"{odom_x}, {odom_y}")
-
             # Pair of eyes (Left=0, Right=1)
             if self.new_frame[0] and self.new_frame[1]: 
                 left_image = self.frames[0]
@@ -197,72 +169,72 @@ class MasterNode(MiRoCameraReader):
                 # Look for object in left eye
                 dets_left = send_frame_to_server(left_image)
                 center_L, conf_L = self.get_target_center(dets_left)
-                dets_right = send_frame_to_server(right_image)
-                center_R, _ = self.get_target_center(dets_right)
-                
+                try:
+                    lefteyex, lefteyey = center_L
+                    rospy.loginfo("Center x and center y of left eye target: {0} and {1}".format(lefteyex, lefteyey))
+                except:
+                    rospy.loginfo("No left eye target")
+                target_detected = False
                 dist = 0.0
                 angle = 0.0
                 
                 successful_observation = False
                 
                 # If found in left, look in right eye to calculate depth
-                if target_detected and not (center_L and center_R):
-                    pass
-                elif (center_L and center_R):
-                    lefteyex, lefteyey = center_L
-                    rospy.loginfo("Center x and center y of left eye target: {0} and {1}".format(lefteyex, lefteyey))
-                    res = self.calc.get_location(center_L, center_R[0])
-                    boxes = [None, None]
-                    for i, detections in enumerate([dets_left, dets_right]):
-                        max_conf = 0.0
-                        chosen_object = None
-                        for obj in detections:
-                            label = obj.get('class_name', obj.get('label', ''))
-                            
-                            if label == TARGET_CLASS:
-                                conf = obj.get('confidence', 0.0)
-                                if conf > max_conf:
-                                    max_conf = conf
-                                    chosen_object = obj
-                        
-                            if chosen_object:
-                                boxes[i] = chosen_object.get('box', [])
-
-                    left_box, right_box = boxes[0], boxes[1]
-
-                    if res:
-                        obj_width = ((left_box[2] - left_box[0]) + (right_box[2] - right_box[0])) / 2
-                        obj_height = ((left_box[3] - left_box[1]) + (right_box[3] - right_box[1])) / 2
-                        obj_len = math.hypot(obj_width, obj_height)
-                        exp_len_at_1m = 50
-                        dist = exp_len_at_1m / obj_len
-                        #dist = res['distance']
-                        angle = res['angle']
-                        rospy.loginfo(f"Object Found: {dist:.2f}m | {angle:.1f} deg")
-                        successful_observation = True
-                    else:
-                        rospy.logwarn("Stereo Mismatch (Negative Disparity)")
-                elif center_R and not center_L:
-                    rospy.loginfo("Object in Right eye only (No Depth), Rotating Right...")
-                    velocity.twist.angular.z = -1.5
-                    self.pub_cmd.publish(velocity)
-                elif center_L and not center_R:
-                    rospy.loginfo("Object only in Left Eye, Rotating Left...")                  
-                    velocity.twist.angular.z = 1.5
-                    self.pub_cmd.publish(velocity)
-                else:
-                    rospy.loginfo("No Object, Rotating Right...")
-                    velocity.twist.angular.z = -1.5
-                    self.pub_cmd.publish(velocity)
+                if center_L:
+                    target_detected = True
                     
+                    dets_right = send_frame_to_server(right_image)
+                    center_R, _ = self.get_target_center(dets_right)
+                    try:
+                        righteyex, righteyey = center_R
+                        rospy.loginfo("Center x and center y of right eye target: {0} and {1}".format(righteyex, righteyey))
+                    except:
+                        rospy.loginfo("No right eye target")
+                    if center_R:
+                        res = self.calc.get_location(center_L, center_R[0])
+                        
+                        boxes = [None, None]
+                        for i, detections in enumerate([dets_left, dets_right]):
+                            max_conf = 0.0
+                            chosen_object = None
+                            for obj in detections:
+                                label = obj.get('class_name', obj.get('label', ''))
+                                
+                                if label == TARGET_CLASS:
+                                    conf = obj.get('confidence', 0.0)
+                                    if conf > max_conf:
+                                        max_conf = conf
+                                        chosen_object = obj
+                            
+                                if chosen_object:
+                                    boxes[i] = chosen_object.get('box', [])
+
+                        left_box, right_box = boxes[0], boxes[1]
+
+                        if res:
+                            obj_width = ((left_box[2] - left_box[0]) + (right_box[2] - right_box[0])) / 2
+                            obj_height = ((left_box[3] - left_box[1]) + (right_box[3] - right_box[1])) / 2
+                            obj_len = math.hypot(obj_width, obj_height)
+                            exp_len_at_1m = 50
+                            dist = exp_len_at_1m / obj_len
+                            #dist = res['distance']
+                            angle = res['angle']
+                            rospy.loginfo(f"Object Found: {dist:.2f}m | {angle:.1f} deg")
+                            successful_observation = True
+                        else:
+                            rospy.logwarn("Stereo Mismatch (Negative Disparity)")
+                    else:
+                        rospy.loginfo("Object in Left eye only (No Depth)")
 
                 if successful_observation:
                     arena_width = 5
                     converted_dist = dist * (1 / arena_width)
 
+
                     miro_angle = pos_data["Yaw"]
                     abs_angle = angle - miro_angle
-                    dx, dy = (math.cos(math.radians(abs_angle)) - odom_x) * converted_dist, (math.sin(math.radians(abs_angle)) - odom_y) * converted_dist
+                    dx, dy = (math.cos(math.radians(abs_angle)) - pos_data["X"]) * converted_dist, (math.sin(math.radians(abs_angle)) - pos_data["Y"]) * converted_dist
                     self.object_permanence_manager.add_observation((dx, dy), 0.5)
 
                 target_pos = self.object_permanence_manager.get_target_pos()
@@ -270,17 +242,15 @@ class MasterNode(MiRoCameraReader):
                 print(f"Target Position {target_pos}")
 
                 if target_pos:
-                    dx, dy = target_pos[0] * arena_width - odom_x, target_pos[1] * arena_width - odom_y
+                    dx, dy = target_pos[0] * arena_width - pos_data["X"], target_pos[1] * arena_width - pos_data["Y"]
                     move_dist = math.hypot(dx, dy)
                     move_dir = math.degrees(math.atan2(dy, dx))
                     print(f"Gotta get moving in direction {move_dir} degrees, distance {move_dist}")
                     self.pub_dist.publish(move_dist)
                     self.pub_angle.publish(move_dir)
-                    target_detected = True
                 else:
                     self.pub_dist.publish(dist)
                     self.pub_angle.publish(angle)
-                    target_detected = False
 
 
                 # Publish Data

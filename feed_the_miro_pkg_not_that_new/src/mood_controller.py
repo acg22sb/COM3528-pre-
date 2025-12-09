@@ -112,10 +112,10 @@ class MoodController:
 
     def update_mood(self, event):
         cert_factor = min(max(self.object_certainty, 0.0), 100.0) / 100.0
-        msg = JointState()
-        msg.name     = ["lift", "yaw", "pitch", "roll"]
-        msg.position = [0.0, 0.9, 0.0, 0.0]
-        self.pub_joints.publish(msg)
+        #msg = JointState()
+        #msg.name     = ["lift", "yaw", "pitch", "roll"]
+        #msg.position = [0.0, 1.0, 0.0, 0.0]
+        #self.pub_joints.publish(msg)
 
         if self.object_visible:
             self.mood += 0.05 * cert_factor
@@ -132,8 +132,8 @@ class MoodController:
             if not self.is_wagging:
                 threading.Thread(target=self.wag_tail, args=(wags,), daemon=True).start()
 
-            ##if not self.is_making_sound:
-                ##threading.Thread(target=self.play_happy_sound, daemon=True).start()
+            if not self.is_making_sound:
+                threading.Thread(target=self.play_happy_sound, daemon=True).start()
 
         elif self.mood < self.sad_threshold:
             if not self.is_wagging:

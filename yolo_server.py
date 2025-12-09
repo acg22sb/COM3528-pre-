@@ -9,8 +9,8 @@ import numpy as np
 import sys
 
 # --- Configuration ---
-MODEL_PATH = 'yolo11n.pt'
-CONFIDENCE_THRESHOLD = 0.2
+MODEL_PATH = 'yolo11l.pt'
+CONFIDENCE_THRESHOLD = 0.1
 
 app = Flask(__name__)
 
