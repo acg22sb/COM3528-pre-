@@ -11,7 +11,8 @@ WORKDIR /app
 RUN pip3 install --no-cache-dir \
     "torch==2.3.1" \
     "torchvision==0.18.1" \
-    --index-url https://download.pytorch.org/whl/cpu
+    --index-url https://download.pytorch.org/whl/cpu \
+    --extra-index-url https://pypi.org/simple
     
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
