@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="feed_the_miro_pkg" type="masternode.py" name="masternode" output="screen"/>
+    <node pkg="feed_the_miro_pkg" type="mood_controller.py" name="mood_controller" output="screen"/>
+    <node pkg="feed_the_miro_pkg" type="follower.py" name="follower" output="screen"/>
+</launch>

@@ -19,7 +19,7 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY yolo_server.py .
 COPY yolov8n.pt .
-COPY yolov11l.pt .
+COPY yolo11l.pt .
 COPY testscript.py .
 COPY testvscript.py .
 COPY testvideo.mp4 .

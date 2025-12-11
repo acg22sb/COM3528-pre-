@@ -14,10 +14,9 @@ from geometry_msgs.msg import TwistStamped
 from camera_reader import MiRoCameraReader
 from testvscript import send_frame_to_server
 from object_permanence_v2 import ObjectPermanenceManager
+from subscriber_odom import OdomSubscriber
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import time
-import threading
-
 
 TARGET_CLASS = "banana" 
 
@@ -102,19 +101,13 @@ class MasterNode(MiRoCameraReader):
 
         self.object_permanence_manager = ObjectPermanenceManager()
         ##self.odom = OdomSubscriber()
-
+        self.x = self.x0 = 0
+        self.y = self.y0 = 0
+        self.theta = self.theta0 = 0
         self.topic_base_name = "/" + os.getenv("MIRO_ROBOT_NAME")
         self.subscriber = rospy.Subscriber(self.topic_base_name + "/sensors/odom", Odometry, self.callback)
         topic_root = "/" + os.getenv("MIRO_ROBOT_NAME", "miro") 
         self.pub_cmd = rospy.Publisher(topic_root + "/control/cmd_vel", TwistStamped, queue_size=10)
-
-        self.linear_velocity = 0
-        self.angular_velocity = 0
-
-        self.vel_lock = threading.Lock()
-
-        motion_thread = threading.Thread(target=self.motion_loop, args=(self.pub_cmd,))
-        motion_thread.start()
 
     def callback(self, data):
         orientation = data.pose.pose.orientation
@@ -122,30 +115,21 @@ class MasterNode(MiRoCameraReader):
         self.y = data.pose.pose.position.y
         (_, _, self.theta) = euler_from_quaternion([orientation.x,
             orientation.y, orientation.z, orientation.w],'sxyz')
-        
-    def wrap_angle(self, angle):
-        return angle % (2 * math.pi)
-    
-    def shortest_angle_dir_deg(self, a, b):
-        return (a - b + 180) % 360 - 180
+
+    def reset(self):
+        # Not a true reset, rather a change in frame of reference
+        self.x0 = self.x
+        self.y0 = self.y
+        self.theta0 = self.theta
 
     def whereAmI(self):
-        if self.x is None or self.y is None or self.theta is None or self.x0 is None or self.y0 is None or self.theta0 is None:
-            return {"X": 0.0, "Y": 0.0, "Yaw": 0.0}
-        
-        dx_ros = self.x - self.x0
-        dy_ros = self.y - self.y0
-
-        dx_rot = dx_ros * math.cos(self.theta0) + dy_ros * math.sin(self.theta0)
-        dy_rot = dx_ros * math.sin(self.theta0) - dy_ros * math.cos(self.theta0)
-
-        yaw = 360 - (180 / math.pi) * self.wrap_angle(self.theta - self.theta0)
-
-        return {
-            "X": dy_rot,
-            "Y": dx_rot,
-            "Yaw": yaw,
+        data = {
+            "X": self.x - self.x0,
+            "Y": self.y - self.y0,
+            "Yaw": self.theta - self.theta0,
         }
+
+        return data
 
 
     def get_target_center(self, detections):
@@ -179,52 +163,31 @@ class MasterNode(MiRoCameraReader):
                 return (center_x, center_y), max_conf
 
         return None, 0.0
-    
-    def wait_for_odom(self, timeout=5.0):
-        start = time.time()
-        while (self.x is None or self.y is None or self.theta is None) and not rospy.is_shutdown():
-            if time.time() - start > timeout:
-                rospy.logwarn("Timeout waiting for initial odometry")
-                break
-            rospy.sleep(0.05)
-        # Set the initial frame
-        self.x0 = self.x
-        self.y0 = self.y
-        self.theta0 = self.theta
-
-    def motion_loop(self, pub):
-        velocity = TwistStamped()
-        rate = rospy.Rate(50)
-        while not rospy.is_shutdown():
-            with self.vel_lock:
-                velocity.twist.linear.x = self.linear_velocity
-                velocity.twist.angular.z = self.angular_velocity
-            pub.publish(velocity)
-            rate.sleep()
 
     def run(self):
         # Check 5 times a second
         rate = rospy.Rate(5)
+        velocity = TwistStamped()
 
         target_detected = False
 
-        self.x = self.y = self.theta = None
-        self.x0 = self.y0 = self.theta0 = None
+        calibrated_odom = False
 
-        rospy.loginfo("Waiting for odom")
-
-        self.wait_for_odom()
-
-        rospy.loginfo("Starting")
+        time.sleep(1) # needed for odom callibration
+        rospy.loginfo("Weeeeeeeeee")
 
         
         while not rospy.is_shutdown():
 
             pos_data = self.whereAmI()
+            
+            if not calibrated_odom:
+                start_x, start_y = pos_data["X"], pos_data["Y"]
+                calibrated_odom = True
 
-            odom_x, odom_y, odom_angle = pos_data["X"], pos_data["Y"], pos_data["Yaw"]
+            odom_x, odom_y = pos_data["X"] - start_x, pos_data["Y"] - start_y
 
-            rospy.loginfo(f"ODOM: {odom_x:.3f}, {odom_y:.3f}, {odom_angle:.1f}")
+            rospy.loginfo(f"{odom_x}, {odom_y}")
 
             # Pair of eyes (Left=0, Right=1)
             if self.new_frame[0] and self.new_frame[1]: 
@@ -246,9 +209,6 @@ class MasterNode(MiRoCameraReader):
                 if target_detected and not (center_L and center_R):
                     pass
                 elif (center_L and center_R):
-                    self.angular_velocity = 0
-                    self.linear_velocity = 0
-                    rospy.loginfo(f"Seen it, stop!")
                     lefteyex, lefteyey = center_L
                     rospy.loginfo("Center x and center y of left eye target: {0} and {1}".format(lefteyex, lefteyey))
                     res = self.calc.get_location(center_L, center_R[0])
@@ -284,25 +244,24 @@ class MasterNode(MiRoCameraReader):
                         rospy.logwarn("Stereo Mismatch (Negative Disparity)")
                 elif center_R and not center_L:
                     rospy.loginfo("Object in Right eye only (No Depth), Rotating Right...")
-                    with self.vel_lock:
-                        self.angular_velocity = -0.5
-                        self.linear_velocity = 0
+                    velocity.twist.angular.z = -1.5
+                    self.pub_cmd.publish(velocity)
                 elif center_L and not center_R:
                     rospy.loginfo("Object only in Left Eye, Rotating Left...")                  
-                    with self.vel_lock:
-                        self.angular_velocity = 0.5
-                        self.linear_velocity = 0
+                    velocity.twist.angular.z = 1.5
+                    self.pub_cmd.publish(velocity)
                 else:
                     rospy.loginfo("No Object, Rotating Right...")
-                    with self.vel_lock:
-                        self.angular_velocity = -0.5
-                        self.linear_velocity = 0
+                    velocity.twist.angular.z = -1.5
+                    self.pub_cmd.publish(velocity)
                     
 
                 if successful_observation:
                     arena_width = 5
                     converted_dist = dist * (1 / arena_width)
-                    abs_angle = angle - odom_angle
+
+                    miro_angle = pos_data["Yaw"]
+                    abs_angle = angle - miro_angle
                     dx, dy = (math.cos(math.radians(abs_angle)) - odom_x) * converted_dist, (math.sin(math.radians(abs_angle)) - odom_y) * converted_dist
                     self.object_permanence_manager.add_observation((dx, dy), 0.5)
 
@@ -313,16 +272,14 @@ class MasterNode(MiRoCameraReader):
                 if target_pos:
                     dx, dy = target_pos[0] * arena_width - odom_x, target_pos[1] * arena_width - odom_y
                     move_dist = math.hypot(dx, dy)
-                    move_dir = math.degrees(self.wrap_angle(math.atan2(dy, dx)))
-                    rospy.loginfo(f"Got a target, moving in direction {move_dir} degrees, distance {move_dist}")
-                    vel_cap = 0.5
-                    ang_vel_cap = 0.5
-                    self.linear_velocity = min(move_dist, vel_cap)
-                    self.angular_velocity = max(min(0.1 * self.shortest_angle_dir_deg(odom_angle, move_dir), ang_vel_cap), - ang_vel_cap)
-                    #self.pub_dist.publish(move_dist)
-                    #self.pub_angle.publish(move_dir)
+                    move_dir = math.degrees(math.atan2(dy, dx))
+                    print(f"Gotta get moving in direction {move_dir} degrees, distance {move_dist}")
+                    self.pub_dist.publish(move_dist)
+                    self.pub_angle.publish(move_dir)
                     target_detected = True
                 else:
+                    self.pub_dist.publish(dist)
+                    self.pub_angle.publish(angle)
                     target_detected = False
 
 
