@@ -48,7 +48,7 @@ class MiroDepthCalculator:
         y = (v_L - self.cy) * z / self.FOCAL_LENGTH
 
         # Calculate Total Straight-Line Distance (Euclidean)
-        total_distance = math.sqrt(x**2 + y**2 + z**2)
+        #total_distance = math.sqrt(x**2 + y**2 + z**2)
 
         # Calculate Direction (Angle relative to nose)
         # 0 degrees is straight ahead. Negative is Left, Positive is Right.
@@ -59,23 +59,48 @@ class MiroDepthCalculator:
             "x": round(x, 3),            # All Meters
             "y": round(y, 3),            
             "z_depth": round(z, 3),     
-            "distance": round(total_distance, 3), 
+            #"distance": round(total_distance, 3), 
             "angle": round(angle_deg, 1)
         }
 
 if __name__ == "__main__":
     calc = MiroDepthCalculator()
 
-    # Example: Object detected at (400, 200) in Left Eye and (380, 200) in Right Eye
-    obj_left_pixel = (400, 200) 
-    obj_right_x = 380
+    print("Test 1:")
+    obj_left_pixel = (100, 200) 
+    obj_right_x = 80
 
     result = calc.get_location(obj_left_pixel, obj_right_x)
 
     if result:
         print(f"--- Object Location ---")
         print(f"Position (X,Y,Z): {result['x']}, {result['y']}, {result['z_depth']} meters")
-        print(f"Total Distance:   {result['distance']} meters")
+        print(f"Direction:        {result['angle']} degrees from center")
+    else:
+        print("Object is too far away or invalid disparity.")
+
+    print("Test 2")
+    obj_left_pixel = (550, 200) 
+    obj_right_x = 530
+
+    result = calc.get_location(obj_left_pixel, obj_right_x)
+
+    if result:
+        print(f"--- Object Location ---")
+        print(f"Position (X,Y,Z): {result['x']}, {result['y']}, {result['z_depth']} meters")
+        print(f"Direction:        {result['angle']} degrees from center")
+    else:
+        print("Object is too far away or invalid disparity.")
+
+    print("Test 3 : REAL")
+    obj_left_pixel = (437, 200) 
+    obj_right_x = 133
+
+    result = calc.get_location(obj_left_pixel, obj_right_x)
+
+    if result:
+        print(f"--- Object Location ---")
+        print(f"Position (X,Y,Z): {result['x']}, {result['y']}, {result['z_depth']} meters")
         print(f"Direction:        {result['angle']} degrees from center")
     else:
         print("Object is too far away or invalid disparity.")
