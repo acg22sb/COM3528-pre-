@@ -106,7 +106,7 @@ class MasterNode(MiRoCameraReader):
         self.topic_base_name = "/" + os.getenv("MIRO_ROBOT_NAME")
         self.subscriber = rospy.Subscriber(self.topic_base_name + "/sensors/odom", Odometry, self.callback)
         topic_root = "/" + os.getenv("MIRO_ROBOT_NAME", "miro") 
-        self.pub_cmd = rospy.Publisher(topic_root + "/control/cmd_vel", TwistStamped, queue_size=10)
+        self.pub_cmd = rospy.Publisher(topic_root + "/control/cmd_vel", TwistStamped, queue_size=1)
 
         self.linear_velocity = 0
         self.angular_velocity = 0
@@ -194,7 +194,7 @@ class MasterNode(MiRoCameraReader):
 
     def motion_loop(self, pub):
         velocity = TwistStamped()
-        rate = rospy.Rate(50)
+        rate = rospy.Rate(5)
         while not rospy.is_shutdown():
             with self.vel_lock:
                 velocity.twist.linear.x = self.linear_velocity
@@ -206,7 +206,7 @@ class MasterNode(MiRoCameraReader):
         # Check 5 times a second
         rate = rospy.Rate(5)
 
-        target_detected = False
+        behaviour_mode = "SEARCH"
 
         self.x = self.y = self.theta = None
         self.x0 = self.y0 = self.theta0 = None
@@ -216,6 +216,10 @@ class MasterNode(MiRoCameraReader):
         self.wait_for_odom()
 
         rospy.loginfo("Starting")
+
+        last_observation_time = None
+
+        target_pos = None
 
         
         while not rospy.is_shutdown():
@@ -243,7 +247,7 @@ class MasterNode(MiRoCameraReader):
                 successful_observation = False
                 
                 # If found in left, look in right eye to calculate depth
-                if target_detected and not (center_L and center_R):
+                if not behaviour_mode == "SEARCH":
                     pass
                 elif (center_L and center_R):
                     self.angular_velocity = 0
@@ -282,52 +286,80 @@ class MasterNode(MiRoCameraReader):
                         successful_observation = True
                     else:
                         rospy.logwarn("Stereo Mismatch (Negative Disparity)")
+
+                    last_observation_time = time.perf_counter()
+
+
+
                 elif center_R and not center_L:
                     rospy.loginfo("Object in Right eye only (No Depth), Rotating Right...")
                     with self.vel_lock:
-                        self.angular_velocity = -0.5
+                        self.angular_velocity = -0.4
                         self.linear_velocity = 0
                 elif center_L and not center_R:
                     rospy.loginfo("Object only in Left Eye, Rotating Left...")                  
                     with self.vel_lock:
-                        self.angular_velocity = 0.5
+                        self.angular_velocity = 0.4
                         self.linear_velocity = 0
                 else:
                     rospy.loginfo("No Object, Rotating Right...")
                     with self.vel_lock:
-                        self.angular_velocity = -0.5
+                        self.angular_velocity = -0.4
                         self.linear_velocity = 0
+                    
+                    if last_observation_time != None and time.perf_counter() - last_observation_time > 3:
+                        target_pos = self.object_permanence_manager.get_target_pos()
+                        if target_pos != None:
+                            behaviour_mode = "FETCH"
+                            rospy.loginfo("ENTERING FETCH MODE!!!")
                     
 
                 if successful_observation:
-                    arena_width = 5
-                    converted_dist = dist * (1 / arena_width)
-                    abs_angle = angle - odom_angle
-                    dx, dy = (math.cos(math.radians(abs_angle)) - odom_x) * converted_dist, (math.sin(math.radians(abs_angle)) - odom_y) * converted_dist
-                    self.object_permanence_manager.add_observation((dx, dy), 0.5)
+                    global_angle_rad = math.radians(odom_angle + angle)
+                    dy = dist * math.cos(global_angle_rad)
+                    dx = dist * math.sin(global_angle_rad)
 
-                target_pos = self.object_permanence_manager.get_target_pos()
+                    ox = odom_x + dx
+                    oy = odom_y + dy
+                    self.object_permanence_manager.add_observation((ox, oy), 0.5)
 
-                print(f"Target Position {target_pos}")
+                self.object_permanence_manager.tick()
 
-                if target_pos:
-                    dx, dy = target_pos[0] * arena_width - odom_x, target_pos[1] * arena_width - odom_y
-                    move_dist = math.hypot(dx, dy)
-                    move_dir = math.degrees(self.wrap_angle(math.atan2(dy, dx)))
-                    rospy.loginfo(f"Got a target, moving in direction {move_dir} degrees, distance {move_dist}")
-                    vel_cap = 0.5
-                    ang_vel_cap = 0.5
-                    self.linear_velocity = min(move_dist, vel_cap)
-                    self.angular_velocity = max(min(0.1 * self.shortest_angle_dir_deg(odom_angle, move_dir), ang_vel_cap), - ang_vel_cap)
-                    #self.pub_dist.publish(move_dist)
-                    #self.pub_angle.publish(move_dir)
-                    target_detected = True
-                else:
-                    target_detected = False
+                
+
+                
+
+
+                if behaviour_mode == "FETCH":
+                    print(f"Target Position {target_pos}")
+                    
+                    target_pos = self.object_permanence_manager.get_target_pos()
+                    if target_pos == None:
+                        rospy.loginfo("I forgot the target")
+                        #behaviour_mode = "SEARCH"
+                        self.linear_velocity = 0
+                    else:
+                        dx, dy = target_pos[0] - odom_x, target_pos[1] - odom_y
+                        move_dist = math.hypot(dx, dy)
+                        move_dir = math.degrees(self.wrap_angle(math.atan2(-dy, dx)))
+                        rospy.loginfo(f"Got a target, moving in direction {move_dir} degrees, distance {move_dist}")
+                        vel_cap = 0.5
+                        ang_vel_cap = 0.5
+                        #self.linear_velocity = min(move_dist * 0.3, vel_cap)
+                        #self.angular_velocity = max(min(0.1 * -self.shortest_angle_dir_deg(odom_angle, move_dir), ang_vel_cap), - ang_vel_cap)
+                        self.pub_dist.publish(move_dist)
+                        angle_to_send_follower  = (move_dir) - odom_angle
+                        rospy.loginfo(angle_to_send_follower)
+                        while angle_to_send_follower > 180:
+                            angle_to_send_follower -= 360
+                        while angle_to_send_follower < -180:
+                            angle_to_send_follower += 360
+                        rospy.loginfo(f"follower being sent: {angle_to_send_follower}")
+                        self.pub_angle.publish(angle_to_send_follower)
 
 
                 # Publish Data
-                self.pub_visible.publish(target_detected)
+                self.pub_visible.publish(last_observation_time != None)
                 self.pub_certainty.publish(conf_L * 100)
 
                 self.new_frame[0] = False
