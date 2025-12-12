@@ -7,7 +7,7 @@ import time
 # import tkinter as tk
 
 class ObjectPermanenceManager:
-    def __init__(self, with_gui=False, permanence_time=10):
+    def __init__(self, with_gui=False, permanence_time=60, threshold_distance = 0.25):
         self.with_gui = with_gui
 
         if self.with_gui:
@@ -23,7 +23,7 @@ class ObjectPermanenceManager:
         self.potential_target_objects = []
         self.click_time = None
         self.permanence_time = permanence_time
-        self.threshold_distance = 0.2
+        self.threshold_distance = threshold_distance
         self.last_time = time.perf_counter()
 
         if self.with_gui:
@@ -71,6 +71,23 @@ class ObjectPermanenceManager:
 
     def screen_pos_to_world_pos(self, pos):
         return 2 * (pos[0] / self.RES[0]) - 1, 2 * (1 - pos[1] / self.RES[1]) - 1
+    
+    def tick(self):
+        now = time.perf_counter()
+        delta_time = now - self.last_time
+        self.last_time = now
+
+        # decay objects
+        i = 0
+        while i < len(self.potential_target_objects):
+            self.potential_target_objects[i].certainty -= (1 / self.permanence_time) * delta_time
+            if self.potential_target_objects[i].certainty <= 0:
+                self.potential_target_objects.pop(i)
+            else:
+                i += 1
+
+        self.potential_target_objects = self.process_consumptions(self.potential_target_objects, self.threshold_distance)
+
 
     def process_consumptions(self, objects, threshold_distance):
         consumed_indices = set()
@@ -110,20 +127,6 @@ class ObjectPermanenceManager:
         self.potential_target_objects.append(self.PotentialTargetObject(world_pos, certainty))
 
     def get_target_pos(self):
-        now = time.perf_counter()
-        delta_time = now - self.last_time
-        self.last_time = now
-
-        # decay objects
-        i = 0
-        while i < len(self.potential_target_objects):
-            self.potential_target_objects[i].certainty -= (1 / self.permanence_time) * delta_time
-            if self.potential_target_objects[i].certainty <= 0:
-                self.potential_target_objects.pop(i)
-            else:
-                i += 1
-
-        self.potential_target_objects = self.process_consumptions(self.potential_target_objects, self.threshold_distance)
 
         # find biggest object
         biggest_object = None
